@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="AutoBogusTest/AutoBogusTest.csproj" />
+  <Project Path="AutoFixtureTest/AutoFixtureTest.csproj" />
+  <Project Path="Common/Common.csproj" />
+  <Project Path="TestDataProvider/TestDataProvider.csproj" />
+  <Project Path="TestDataProviderTest/TestDataProviderTest.csproj" />
+</Solution>
