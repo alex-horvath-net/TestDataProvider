@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Immutable;
 
 namespace Common;
@@ -32,7 +33,9 @@ public class ExampleClass
     // nested other example
     public ExampleOtherClass Other { get; }
 
-    
+    // timestamp
+    public DateTime Timestamp { get; }
+
     public ExampleClass(
         int primitiveInt,
         string primitiveString,
@@ -45,6 +48,7 @@ public class ExampleClass
         ImmutableDictionary<string, int> immutableDictionary,
         HashSet<int> hashSet,
         ImmutableHashSet<int> immutableHashSet,
+        DateTime timestamp,
         ExampleOtherClass other)
     {
         PrimitiveInt = primitiveInt;
@@ -59,5 +63,6 @@ public class ExampleClass
         HashSet = hashSet;
         ImmutableSet = immutableHashSet;
         Other = other;
+        Timestamp = timestamp;
     }
 }

@@ -9,7 +9,6 @@ namespace AutoBogusTest {
     public class BogusFixture {
         // Registered factories optimized for concurrent access
         private readonly ConcurrentDictionary<Type, Func<object>> registeredFactories = new();
-        private readonly IAutoFaker faker;
         public int RepeatCount { get; set; }
 
         // cache commonly used reflection MethodInfos to avoid repeated lookups
@@ -74,11 +73,15 @@ namespace AutoBogusTest {
 
         private object Create(Type type, HashSet<Type> visitedTypes) {
             if (TryGetFactory(type, out var factory))
+            {
                 return factory()!;
+            }
 
             // guard recursion
             if (visitedTypes.Contains(type))
+            {
                 return AutoFakerGenerate(type);
+            }
 
             // capture RepeatCount locally
             var repeat = RepeatCount;
@@ -89,26 +92,30 @@ namespace AutoBogusTest {
                 var genArgs = type.GetGenericArguments();
 
                 // Immutable collections
-                if (genDef == typeof(ImmutableArray<>)) {
+                if (genDef == typeof(ImmutableArray<>))
+                {
                     var elemType = genArgs[0];
                     var list = CreateListInstance(elemType, repeat, visitedTypes);
                     var del = ImmutableArrayCreateRangeCache.GetOrAdd(elemType, t => CompileCreateRangeDelegate(ImmutableArrayCreateRange, t));
                     return del(list);
                 }
-                if (genDef == typeof(ImmutableList<>)) {
+                if (genDef == typeof(ImmutableList<>))
+                {
                     var elemType = genArgs[0];
                     var list = CreateListInstance(elemType, repeat, visitedTypes);
                     var del = ImmutableListCreateRangeCache.GetOrAdd(elemType, t => CompileCreateRangeDelegate(ImmutableListCreateRange, t));
                     return del(list);
                 }
-                if (genDef == typeof(ImmutableDictionary<,>)) {
+                if (genDef == typeof(ImmutableDictionary<,>))
+                {
                     var keyType = genArgs[0];
                     var valType = genArgs[1];
                     var dict = CreateDictionaryInstance(keyType, valType, repeat, visitedTypes);
                     var del = ImmutableDictionaryCreateRangeCache.GetOrAdd((keyType, valType), kv => CompileCreateRangeDelegate(ImmutableDictionaryCreateRange, kv.key, kv.value));
                     return del(dict);
                 }
-                if (genDef == typeof(ImmutableHashSet<>)) {
+                if (genDef == typeof(ImmutableHashSet<>))
+                {
                     var elemType = genArgs[0];
                     var list = CreateListInstance(elemType, repeat, visitedTypes);
                     var del = ImmutableHashSetCreateRangeCache.GetOrAdd(elemType, t => CompileCreateRangeDelegate(ImmutableHashSetCreateRange, t));
@@ -116,22 +123,28 @@ namespace AutoBogusTest {
                 }
 
                 // common generic collections: IEnumerable<T>, List<T>, HashSet<T>, Dictionary<K,V>
-                if (genDef == typeof(IEnumerable<>)) {
+                if (genDef == typeof(IEnumerable<>))
+                {
                     var elemType = genArgs[0];
                     return CreateListInstance(elemType, repeat, visitedTypes);
                 }
-                if (genDef == typeof(List<>)) {
+                if (genDef == typeof(List<>))
+                {
                     var elemType = genArgs[0];
                     var list = (IList)Activator.CreateInstance(type)!;
-                    for (int i = 0; i < repeat; i++)
+                    for (var i = 0; i < repeat; i++)
+                    {
                         list.Add(Create(elemType, visitedTypes));
+                    }
                     return list;
                 }
-                if (genDef == typeof(HashSet<>)) {
+                if (genDef == typeof(HashSet<>))
+                {
                     var elemType = genArgs[0];
                     return CreateHashSetInstance(elemType, repeat, visitedTypes);
                 }
-                if (genDef == typeof(Dictionary<,>)) {
+                if (genDef == typeof(Dictionary<,>))
+                {
                     var keyType = genArgs[0];
                     var valType = genArgs[1];
                     return CreateDictionaryInstance(keyType, valType, repeat, visitedTypes);
@@ -139,57 +152,86 @@ namespace AutoBogusTest {
             }
 
             // handle arrays
-            if (type.IsArray) {
+            if (type.IsArray)
+            {
                 var elemType = type.GetElementType()!;
                 var arr = Array.CreateInstance(elemType, RepeatCount);
-                for (int i = 0; i < RepeatCount; i++)
+                for (var i = 0; i < RepeatCount; i++)
+                {
                     arr.SetValue(Create(elemType, visitedTypes), i);
+                }
                 return arr;
             }
 
             // primitive handling with small sanitization for tests using cached AutoFaker delegates
-            if (type == typeof(string)) {
+            if (type == typeof(string))
+            {
                 var s = (string)AutoFakerGenerate(typeof(string))!;
                 if (string.IsNullOrWhiteSpace(s))
+                {
                     s = "s" + System.Guid.NewGuid().ToString("N").Substring(0, 6);
+                }
                 return s;
             }
-            if (type == typeof(int)) {
+            if (type == typeof(int))
+            {
                 var v = (int)AutoFakerGenerate(typeof(int))!;
                 if (v == int.MinValue)
+                {
                     v = 1;
+                }
                 v = Math.Abs(v);
                 if (v == 0)
+                {
                     v = 1;
+                }
                 return v;
             }
             if (type.IsPrimitive || type.IsEnum || type == typeof(decimal))
                 return AutoFakerGenerate(type);
 
             var ctors = type.GetConstructors(BindingFlags.Public | BindingFlags.Instance);
-            if (ctors.Length == 0) {
-                try { return Activator.CreateInstance(type)!; } catch { return AutoFakerGenerate(type); }
+            if (ctors.Length == 0)
+            {
+                try
+                {
+                    return Activator.CreateInstance(type)!;
+                }
+                catch
+                {
+                    return AutoFakerGenerate(type);
+                }
             }
 
             var ctor = System.Linq.Enumerable.OrderByDescending(ctors, c => c.GetParameters().Length).First();
             var ctorParameterTypes = ctor.GetParameters();
             var ctorArguments = new object[ctorParameterTypes.Length];
             visitedTypes.Add(type);
-            try {
-                for (int i = 0; i < ctorParameterTypes.Length; i++) {
+            try
+            {
+                for (var i = 0; i < ctorParameterTypes.Length; i++)
+                {
                     var ctorParameterType = ctorParameterTypes[i].ParameterType;
-                    ctorArguments[i] = TryGetFactory(ctorParameterType, out var ctorParameterTypeFactory) ?
-                        ctorParameterTypeFactory()! :
-                        Create(ctorParameterType, visitedTypes);
+                    ctorArguments[i] = TryGetFactory(ctorParameterType, out var ctorParameterTypeFactory)
+                        ? ctorParameterTypeFactory()!
+                        : Create(ctorParameterType, visitedTypes);
                 }
                 // ensure no null constructor ctorArguments: replace nulls with AutoFaker-generated defaults
-                for (int i = 0; i < ctorParameterTypes.Length; i++)
+                for (var i = 0; i < ctorParameterTypes.Length; i++)
+                {
                     if (ctorArguments[i] == null)
+                    {
                         ctorArguments[i] = AutoFakerGenerate(ctorParameterTypes[i].ParameterType);
+                    }
+                }
                 return ctor.Invoke(ctorArguments)!;
-            } catch {
+            }
+            catch
+            {
                 return AutoFakerGenerate(type);
-            } finally {
+            }
+            finally
+            {
                 visitedTypes.Remove(type);
             }
         }
@@ -219,7 +261,7 @@ namespace AutoBogusTest {
         private IList CreateListInstance(Type elemType, int repeat, HashSet<Type> visitedTypes) {
             var listType = typeof(List<>).MakeGenericType(elemType);
             var list = (IList)Activator.CreateInstance(listType)!;
-            for (int i = 0; i < repeat; i++)
+            for (var i = 0; i < repeat; i++)
                 list.Add(Create(elemType, visitedTypes));
             return list;
         }
@@ -228,7 +270,7 @@ namespace AutoBogusTest {
             var setType = typeof(HashSet<>).MakeGenericType(elemType);
             var set = (IEnumerable)Activator.CreateInstance(setType)!;
             var add = setType.GetMethod("Add")!;
-            for (int i = 0; i < repeat; i++)
+            for (var i = 0; i < repeat; i++)
                 add.Invoke(set, new[] { Create(elemType, visitedTypes) });
             return set!;
         }
@@ -236,7 +278,7 @@ namespace AutoBogusTest {
         private System.Collections.IDictionary CreateDictionaryInstance(Type keyType, Type valType, int repeat, HashSet<Type> visitedTypes) {
             var dictType = typeof(Dictionary<,>).MakeGenericType(keyType, valType);
             var dict = (System.Collections.IDictionary)Activator.CreateInstance(dictType)!;
-            for (int i = 0; i < repeat; i++) {
+            for (var i = 0; i < repeat; i++) {
                 object key = keyType == typeof(string) ? (object)$"k{i}" : Create(keyType, visitedTypes);
                 var val = Create(valType, visitedTypes);
                 dict.Add(key, val);
