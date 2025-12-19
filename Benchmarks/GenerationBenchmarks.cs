@@ -38,17 +38,8 @@ public class GenerationBenchmarks {
     public ExampleRecord AutoFixture_ExampleRecord() => _autoFixture.Create<ExampleRecord>();
 
     [Benchmark]
-    public ExampleClass AutoBogus_ExampleClass() => AutoFaker.Generate<ExampleClass>(cfg => cfg.WithRepeatCount(3));
+    public ExampleClass AutoBogus_ExampleClass() => _bogusFixture.Create<ExampleClass>();
 
     [Benchmark]
-    public ExampleRecord AutoBogus_ExampleRecord_WithImmutableFactories() {
-        var fixture = new BogusFixture { RepeatCount = 3 };
-
-        fixture.Register(() => fixture.CreateMany<int>().ToImmutableArray());
-        fixture.Register(() => fixture.CreateMany<string>().ToImmutableList());
-        fixture.Register(() => fixture.CreateMany<string>().ToImmutableDictionary(x => x, x => x.Length));
-        fixture.Register(() => fixture.CreateMany<int>().ToImmutableHashSet());
-
-        return fixture.Create<ExampleRecord>();
-    }
+    public ExampleRecord AutoBogus_ExampleRecord_WithImmutableFactories() => _bogusFixture.Create<ExampleRecord>();
 }
