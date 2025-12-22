@@ -44,19 +44,8 @@ public sealed class BogusFixtureBuilder<T> {
         };
     }
 
-    private static Action<T, TValue>? CompileSetterOrDefault<TValue>(Expression<Func<T, TValue>> selector) {
-        return null;
-    }
-
     private static T ReconstructWith<TValue>(T source, MemberInfo member, TValue value)
     {
-        if (typeof(T) == typeof(ExampleRecord) && member.Name.Equals(nameof(ExampleRecord.OtherRecord), StringComparison.OrdinalIgnoreCase))
-        {
-            var rec = (ExampleRecord)(object)source!;
-            var updated = rec with { OtherRecord = (ExampleOtherRecord?)(object?)value };
-            return (T)(object)updated;
-        }
-
         var ctor = typeof(T).GetConstructors()
             .OrderByDescending(c => c.GetParameters().Length)
             .FirstOrDefault() ?? throw new InvalidOperationException("Type must have a public constructor");
