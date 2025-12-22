@@ -35,13 +35,9 @@ public sealed class BogusFixtureBuilder<T> {
 
     public IEnumerable<T> CreateMany(int? count = null) {
         var total = count ?? fixture.RepeatCount;
-        for (var i = 0; i < total; i++) {
-            var instance = fixture.Create<T>();
-            for (var j = 0; j < mutators.Count; j++) {
-                instance = mutators[j](instance);
-            }
-
-            yield return instance;
+        for (var j = 0; j < total; j++) {
+            
+            yield return Create();
         }
     }
 

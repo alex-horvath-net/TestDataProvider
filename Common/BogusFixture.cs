@@ -19,12 +19,14 @@ public sealed class BogusFixture
     private static readonly Type DecimalType = typeof(decimal);
     private static readonly Type GuidType = typeof(Guid);
     private static readonly Type DateTimeType = typeof(DateTime);
+    private static readonly Type DateTimeOffsetType = typeof(DateTimeOffset);
     private static readonly Type UriType = typeof(Uri);
     private static readonly HashSet<Type> SimpleTypes = new()
     {
         StringType,
         DecimalType,
         DateTimeType,
+        DateTimeOffsetType,
         GuidType,
         UriType,
         ByteType,
@@ -436,13 +438,27 @@ public sealed class BogusFixture
             return () => DateTime.UtcNow.AddMilliseconds(Rng().Int(-100000, 100000));
         }
 
+        if (type == DateTimeOffsetType) {
+            return () => DateTimeOffset.UtcNow.AddMilliseconds(Rng().Int(-100000, 100000));
+        }
+
         if (type.IsEnum)
         {
             var values = enumValuesCache.GetOrAdd(type, Enum.GetValues);
             return () => values.GetValue(Rng().Int(0, values.Length - 1))!;
         }
 
-        return () => Activator.CreateInstance(type) ?? string.Empty;
+        return () =>
+        {
+            try
+            {
+                return Activator.CreateInstance(type) ?? string.Empty;
+            }
+            catch
+            {
+                return type.IsValueType ? Activator.CreateInstance(type)! : string.Empty;
+            }
+        };
     }
 
     private static bool IsSimple(Type type) {

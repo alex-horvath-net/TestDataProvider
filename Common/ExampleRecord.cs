@@ -15,5 +15,6 @@ public record ExampleRecord(
     HashSet<int> HashSet,
     ImmutableHashSet<int> ImmutableSet,
     ExampleOtherClass OtherClass,
-    ExampleOtherRecord OtherRecord
+    ExampleOtherRecord OtherRecord,
+    DateTimeOffset Timestamp
     );
