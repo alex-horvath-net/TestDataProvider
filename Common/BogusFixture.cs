@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Reflection;
+using System.Threading;
 using Bogus;
 
 namespace Common;
@@ -42,11 +43,13 @@ public sealed class BogusFixture
     private static readonly Type GenericImmutableHashSetType = typeof(ImmutableHashSet<>);
     private static readonly Type GenericImmutableDictionaryType = typeof(ImmutableDictionary<,>);
     private static readonly Type GenericKeyValuePairType = typeof(KeyValuePair<,>);
+    private static readonly ConcurrentBag<HashSet<Type>> VisitedSets = new();
 
     private readonly ConcurrentDictionary<Type, Func<object>> _registeredFactories = new();
     private readonly ConcurrentDictionary<Type, Func<object>> _primitiveGenerators = new();
     private readonly ConcurrentDictionary<Type, ConstructorInfo?> _preferredConstructors = new();
-    private readonly Randomizer _random = new();
+    private readonly ConcurrentDictionary<Type, Array> _enumValuesCache = new();
+    private readonly ThreadLocal<Randomizer> _random;
 
     private static readonly MethodInfo ImmutableArrayToImmutableArray = typeof(ImmutableArray)
         .GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -89,7 +92,18 @@ public sealed class BogusFixture
 
     public void Register<T>(Func<T> factory) => _registeredFactories[typeof(T)] = () => factory()!;
 
-    public T Create<T>() => (T)Create(typeof(T), new HashSet<Type>());
+    public T Create<T>()
+    {
+        var visited = RentVisitedSet();
+        try
+        {
+            return (T)Create(typeof(T), visited);
+        }
+        finally
+        {
+            ReturnVisitedSet(visited);
+        }
+    }
 
     public IEnumerable<T> CreateMany<T>(int? count = null)
     {
@@ -290,21 +304,23 @@ public sealed class BogusFixture
 
     private Func<object> CreatePrimitiveGenerator(Type type)
     {
-        if (type == StringType) return () => _random.AlphaNumeric(8);
-        if (type == IntType) return () => Math.Max(1, _random.Int(1, int.MaxValue));
-        if (type == LongType) return () => Math.Abs(_random.Long()) + 1;
-        if (type == ShortType) return () => (short)_random.Int(short.MinValue, short.MaxValue);
-        if (type == ByteType) return () => _random.Byte();
-        if (type == BoolType) return () => _random.Bool();
-        if (type == DoubleType) return () => _random.Double();
-        if (type == FloatType) return () => (float)_random.Double();
-        if (type == DecimalType) return () => _random.Decimal();
+        var rng = _random;
+
+        if (type == StringType) return () => rng.Value!.AlphaNumeric(8);
+        if (type == IntType) return () => Math.Max(1, rng.Value!.Int(1, int.MaxValue));
+        if (type == LongType) return () => Math.Abs(rng.Value!.Long()) + 1;
+        if (type == ShortType) return () => (short)rng.Value!.Int(short.MinValue, short.MaxValue);
+        if (type == ByteType) return () => rng.Value!.Byte();
+        if (type == BoolType) return () => rng.Value!.Bool();
+        if (type == DoubleType) return () => rng.Value!.Double();
+        if (type == FloatType) return () => (float)rng.Value!.Double();
+        if (type == DecimalType) return () => rng.Value!.Decimal();
         if (type == GuidType) return () => Guid.NewGuid();
-        if (type == DateTimeType) return () => DateTime.UtcNow.AddMilliseconds(_random.Int(-100000, 100000));
+        if (type == DateTimeType) return () => DateTime.UtcNow.AddMilliseconds(rng.Value!.Int(-100000, 100000));
         if (type.IsEnum)
         {
-            var values = Enum.GetValues(type);
-            return () => values.GetValue(_random.Int(0, values.Length - 1))!;
+            var values = _enumValuesCache.GetOrAdd(type, Enum.GetValues);
+            return () => values.GetValue(rng.Value!.Int(0, values.Length - 1))!;
         }
 
         return () => Activator.CreateInstance(type) ?? string.Empty;
@@ -312,4 +328,19 @@ public sealed class BogusFixture
 
     private static bool IsSimple(Type type) =>
         type.IsPrimitive || type.IsEnum || SimpleTypes.Contains(type);
+
+    private static HashSet<Type> RentVisitedSet() => VisitedSets.TryTake(out var set) ? set : new HashSet<Type>();
+
+    private static void ReturnVisitedSet(HashSet<Type> set)
+    {
+        set.Clear();
+        VisitedSets.Add(set);
+    }
+
+    public BogusFixture(int? seed = null)
+    {
+        _random = new ThreadLocal<Randomizer>(() => seed.HasValue ? new Randomizer(seed.Value) : new Randomizer());
+    }
+
+    public BogusFixture() : this(null) { }
 }
