@@ -1,4 +1,8 @@
-﻿using BenchmarkDotNet.Running;
+﻿using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Exporters;
+using BenchmarkDotNet.Loggers;
+using BenchmarkDotNet.Running;
+using Microsoft.Diagnostics.Tracing.AutomatedAnalysis;
 
 namespace Benchmarks;
 
@@ -6,7 +10,11 @@ public static class Program
 {
     public static void Main(string[] args)
     {
-        BenchmarkRunner.Run<GenerationBenchmarks>();
-        //BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
+        var config =  DefaultConfig.Instance
+            .AddExporter(MarkdownExporter.Console)
+            .AddExporter(AsciiDocExporter.Default)
+            .AddLogger(ConsoleLogger.Default);
+
+        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
     }
 }

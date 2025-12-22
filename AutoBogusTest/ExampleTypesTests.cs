@@ -1,13 +1,11 @@
-using System.Collections.Immutable;
 using Common;
 
 namespace AutoBogusTest {
     public class ExampleTypesTests {
-        private BogusFixture fixture = FixtureFactory.CreateByAutoBogus();
+        private readonly BogusFixture fixture = FixtureFactory.CreateByBogus();
 
         [Fact]
         public void AutoBogus_Creates_ExampleClass() {
-            
             var ex = fixture.Create<ExampleClass>();
 
             Assert.False(string.IsNullOrWhiteSpace(ex.PrimitiveString));
