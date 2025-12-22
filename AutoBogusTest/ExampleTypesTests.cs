@@ -24,12 +24,13 @@ namespace AutoBogusTest {
 
         [Fact]
         public void AutoBogus_Build_ExampleClass() {
-            //var ex = fixture.Create<ExampleClass>();
-            var ex = fixture.Build<ExampleClass>().With(x => x.PrimitiveInt, 42).Create();
+            var link = new ExampleOtherRecord(new Uri("http://example.com"), "Example");
+            var ex = fixture
+                .Build<ExampleRecord>()
+                .With(x => x.OtherRecord, link)
+                .Create();
 
             Assert.False(string.IsNullOrWhiteSpace(ex.PrimitiveString));
-            Assert.True(ex.PrimitiveInt == 42);
-            Assert.True(ex.Other != null);
             Assert.Equal(3, ex.Array.Length);
             Assert.Equal(3, ex.ImmutableArr.Length);
             Assert.Equal(3, ex.List.Count);
@@ -38,6 +39,8 @@ namespace AutoBogusTest {
             Assert.Equal(3, ex.ImmutableDict.Count);
             Assert.Equal(3, ex.HashSet.Count);
             Assert.Equal(3, ex.ImmutableSet.Count);
+            Assert.True(ex.OtherRecord != null);
+            Assert.Equal("http://example.com/", ex.OtherRecord.Link.AbsoluteUri);
         }
 
         [Fact]
@@ -46,7 +49,7 @@ namespace AutoBogusTest {
 
             Assert.False(string.IsNullOrWhiteSpace(ex.PrimitiveString));
             Assert.True(ex.PrimitiveInt > 0);
-            Assert.True(ex.Other != null);
+            Assert.True(ex.OtherRecord != null);
             Assert.Equal(3, ex.Array.Length);
             Assert.Equal(3, ex.ImmutableArr.Length);
             Assert.Equal(3, ex.List.Count);
@@ -58,5 +61,6 @@ namespace AutoBogusTest {
         }
     }
 }
+
 
 

@@ -22,7 +22,19 @@ public static class FixtureFactory {
         fixture.Register(() => fixture.CreateMany<string>().ToImmutableDictionary(x => x, x => x.Length));
         fixture.Register(() => fixture.CreateMany<int>().ToImmutableHashSet());
         fixture.Register(() => fixture.Create<ExampleOtherClass>());
-        fixture.Register(() => fixture.Build<ExampleClass>().With(x => x.PrimitiveInt, 42).Create());
+        fixture.Register(() =>
+        {
+            var temp = new BogusFixture { RepeatCount = fixture.RepeatCount };
+            temp.Register(() => temp.CreateMany<int>().ToImmutableArray());
+            temp.Register(() => temp.CreateMany<string>().ToImmutableList());
+            temp.Register(() => temp.CreateMany<string>().ToImmutableDictionary(x => x, x => x.Length));
+            temp.Register(() => temp.CreateMany<int>().ToImmutableHashSet());
+            temp.Register(() => temp.Create<ExampleOtherClass>());
+
+            var instance = temp.Create<ExampleClass>();
+            instance.PrimitiveInt = 42;
+            return instance;
+        });
 
 
         return fixture;

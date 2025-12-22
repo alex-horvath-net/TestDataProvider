@@ -19,12 +19,14 @@ public sealed class BogusFixture
     private static readonly Type DecimalType = typeof(decimal);
     private static readonly Type GuidType = typeof(Guid);
     private static readonly Type DateTimeType = typeof(DateTime);
+    private static readonly Type UriType = typeof(Uri);
     private static readonly HashSet<Type> SimpleTypes = new()
     {
         StringType,
         DecimalType,
         DateTimeType,
         GuidType,
+        UriType,
         ByteType,
         ShortType,
         IntType,
@@ -109,25 +111,32 @@ public sealed class BogusFixture
     {
         var total = count ?? RepeatCount;
         for (var i = 0; i < total; i++)
+        {
             yield return Create<T>();
+        }
     }
 
     private object Create(Type type, HashSet<Type> visitedTypes)
     {
-        if (TryCreateInstanceByFactory(type, visitedTypes, out var instanceByFactory))
+        if (TryCreateInstanceByFactory(type, visitedTypes, out var instanceByFactory)) {
             return instanceByFactory ?? GeneratePrimitive(type);
+        }
 
-        if (visitedTypes.Contains(type))
+        if (visitedTypes.Contains(type)) {
             return GeneratePrimitive(type);
+        }
 
-        if (TryCreateGeneric(type, visitedTypes, out var genericResult))
+        if (TryCreateGeneric(type, visitedTypes, out var genericResult)) {
             return genericResult ?? GeneratePrimitive(type);
+        }
 
-        if (type.IsArray)
+        if (type.IsArray) {
             return CreateArray(type, visitedTypes);
+        }
 
-        if (IsSimple(type))
+        if (IsSimple(type)) {
             return GeneratePrimitive(type);
+        }
 
         return CreateUsingConstructor(type, visitedTypes);
     }
@@ -135,15 +144,16 @@ public sealed class BogusFixture
     private bool TryCreateInstanceByFactory(Type type, HashSet<Type> createdTypes, out object? result)
     {
         result = null;
-        if (!_factories.TryGetValue(type, out var factory))
+        if (!_factories.TryGetValue(type, out var factory)) {
             return false;
+        }
 
         var creatingTypes = _creatingTypes.Value!;
-        if (creatingTypes.Contains(type))
+        if (creatingTypes.Contains(type)) {
             return false;
+        }
 
         creatingTypes.Add(type);
-        createdTypes.Add(type);
         try
         {
             result = factory();
@@ -151,7 +161,6 @@ public sealed class BogusFixture
         }
         finally
         {
-            createdTypes.Remove(type);
             creatingTypes.Remove(type);
         }
     }
@@ -159,8 +168,9 @@ public sealed class BogusFixture
     private bool TryCreateGeneric(Type type, HashSet<Type> visitedTypes, out object? result)
     {
         result = null;
-        if (!type.IsGenericType)
+        if (!type.IsGenericType) {
             return false;
+        }
 
         var genDef = type.GetGenericTypeDefinition();
         var genArgs = type.GetGenericArguments();
@@ -228,7 +238,9 @@ public sealed class BogusFixture
         var arr = Array.CreateInstance(elem, RepeatCount);
         visitedTypes.Add(type);
         for (var i = 0; i < RepeatCount; i++)
+        {
             arr.SetValue(Create(elem, visitedTypes), i);
+        }
         visitedTypes.Remove(type);
         return arr;
     }
@@ -261,10 +273,14 @@ public sealed class BogusFixture
         try
         {
             for (var i = 0; i < parameters.Length; i++)
+            {
                 args[i] = Create(parameters[i].ParameterType, visitedTypes);
+            }
 
             for (var i = 0; i < parameters.Length; i++)
+            {
                 args[i] ??= GeneratePrimitive(parameters[i].ParameterType);
+            }
 
             return ctor.Invoke(args);
         }
@@ -284,7 +300,9 @@ public sealed class BogusFixture
     {
         var list = (IList)Activator.CreateInstance(GenericListType.MakeGenericType(elementType))!;
         for (var i = 0; i < count; i++)
+        {
             list.Add(Create(elementType, visitedTypes));
+        }
         return list;
     }
 
@@ -298,10 +316,13 @@ public sealed class BogusFixture
         foreach (var item in items)
         {
             var addedResult = add.Invoke(set, new[] { item });
-            if (addedResult is bool ok && ok)
+            if (addedResult is bool ok && ok) {
                 added++;
-            if (added >= count)
+            }
+
+            if (added >= count) {
                 break;
+            }
         }
         return set;
     }
@@ -365,17 +386,54 @@ public sealed class BogusFixture
     {
         Randomizer Rng() => _random.Value!;
 
-        if (type == StringType) return () => Rng().AlphaNumeric(8);
-        if (type == IntType) return () => Math.Max(1, Rng().Int(1, int.MaxValue));
-        if (type == LongType) return () => Math.Abs(Rng().Long()) + 1;
-        if (type == ShortType) return () => (short)Rng().Int(short.MinValue, short.MaxValue);
-        if (type == ByteType) return () => Rng().Byte();
-        if (type == BoolType) return () => Rng().Bool();
-        if (type == DoubleType) return () => Rng().Double();
-        if (type == FloatType) return () => (float)Rng().Double();
-        if (type == DecimalType) return () => Rng().Decimal();
-        if (type == GuidType) return () => Guid.NewGuid();
-        if (type == DateTimeType) return () => DateTime.UtcNow.AddMilliseconds(Rng().Int(-100000, 100000));
+        if (type == StringType) {
+            return () => Rng().AlphaNumeric(8);
+        }
+
+        if (type == IntType) {
+            return () => Math.Max(1, Rng().Int(1, int.MaxValue));
+        }
+
+        if (type == LongType) {
+            return () => Math.Abs(Rng().Long()) + 1;
+        }
+
+        if (type == ShortType) {
+            return () => (short)Rng().Int(short.MinValue, short.MaxValue);
+        }
+
+        if (type == ByteType) {
+            return () => Rng().Byte();
+        }
+
+        if (type == BoolType) {
+            return () => Rng().Bool();
+        }
+
+        if (type == DoubleType) {
+            return () => Rng().Double();
+        }
+
+        if (type == FloatType) {
+            return () => (float)Rng().Double();
+        }
+
+        if (type == DecimalType) {
+            return () => Rng().Decimal();
+        }
+
+        if (type == GuidType) {
+            return () => Guid.NewGuid();
+        }
+
+        if (type == UriType) {
+            return () => new Uri($"http://{Rng().AlphaNumeric(8)}.example.com");
+        }
+
+        if (type == DateTimeType) {
+            return () => DateTime.UtcNow.AddMilliseconds(Rng().Int(-100000, 100000));
+        }
+
         if (type.IsEnum)
         {
             var values = _enumValuesCache.GetOrAdd(type, Enum.GetValues);

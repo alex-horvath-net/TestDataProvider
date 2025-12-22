@@ -32,7 +32,7 @@ namespace AutoFixtureTest {
 
             Assert.False(string.IsNullOrWhiteSpace(ex.PrimitiveString));
             Assert.True(ex.PrimitiveInt == 42);
-            Assert.True(ex.Other != null);
+            Assert.True(ex.OtherRecord != null);
             Assert.Equal(3, ex.Array.Length);
             Assert.Equal(3, ex.ImmutableArr.Length);
             Assert.Equal(3, ex.List.Count);
