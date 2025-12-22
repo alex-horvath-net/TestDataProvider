@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Linq.Expressions;
 using System.Reflection;
 
@@ -30,6 +31,18 @@ public sealed class BogusFixtureBuilder<T> {
         }
 
         return instance;
+    }
+
+    public IEnumerable<T> CreateMany(int? count = null) {
+        var total = count ?? fixture.RepeatCount;
+        for (var i = 0; i < total; i++) {
+            var instance = fixture.Create<T>();
+            for (var j = 0; j < mutators.Count; j++) {
+                instance = mutators[j](instance);
+            }
+
+            yield return instance;
+        }
     }
 
     private static MemberInfo GetMember<TValue>(Expression<Func<T, TValue>> selector)
