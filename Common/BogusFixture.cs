@@ -92,7 +92,9 @@ public sealed class BogusFixture
 
     public int RepeatCount { get; set; } = 3;
 
-    public void Register<T>(Func<T> factory) => _factories[typeof(T)] = () => factory()!;
+    public void Register<T>(Func<T> factory) {
+        _factories[typeof(T)] = () => factory()!;
+    }
 
     public T Create<T>()
     {
@@ -443,10 +445,13 @@ public sealed class BogusFixture
         return () => Activator.CreateInstance(type) ?? string.Empty;
     }
 
-    private static bool IsSimple(Type type) =>
-        type.IsPrimitive || type.IsEnum || SimpleTypes.Contains(type);
+    private static bool IsSimple(Type type) {
+        return type.IsPrimitive || type.IsEnum || SimpleTypes.Contains(type);
+    }
 
-    private static HashSet<Type> RentVisitedSet() => VisitedSets.TryTake(out var set) ? set : new HashSet<Type>();
+    private static HashSet<Type> RentVisitedSet() {
+        return VisitedSets.TryTake(out var set) ? set : new HashSet<Type>();
+    }
 
     private static void ReturnVisitedSet(HashSet<Type> set)
     {
@@ -461,6 +466,7 @@ public sealed class BogusFixture
 
     public BogusFixture() : this(null) { }
 
-    public BogusFixtureBuilder<T> Build<T>() => new(this);
-
+    public BogusFixtureBuilder<T> Build<T>() {
+        return new(this);
+    }
 }

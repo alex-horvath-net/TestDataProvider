@@ -45,7 +45,9 @@ public sealed class BogusFixtureBuilder<T> {
         };
     }
 
-    private static Action<T, TValue>? CompileSetterOrDefault<TValue>(Expression<Func<T, TValue>> selector) => null;
+    private static Action<T, TValue>? CompileSetterOrDefault<TValue>(Expression<Func<T, TValue>> selector) {
+        return null;
+    }
 
     private static T ReconstructWith<TValue>(T source, MemberInfo member, TValue value)
     {

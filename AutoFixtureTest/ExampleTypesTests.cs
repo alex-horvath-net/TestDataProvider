@@ -5,7 +5,7 @@ using Common;
 namespace AutoFixtureTest {
     public class ExampleTypesTests {
 
-        Fixture fixture = FixtureFactory.CreateByAutoFixture();
+       private readonly Fixture fixture = FixtureFactory.CreateByAutoFixture();
 
         [Fact]
         public void AutoFixture_Creates_ExampleClass() {
