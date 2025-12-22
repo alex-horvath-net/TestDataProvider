@@ -1,15 +1,34 @@
 using Common;
+using Xunit;
 
 namespace AutoBogusTest {
     public class ExampleTypesTests {
-        private readonly BogusFixture fixture = FixtureFactory.CreateByBogus();
+        private static readonly BogusFixture fixture = FixtureFactory.CreateByBogus();
 
         [Fact]
         public void AutoBogus_Creates_ExampleClass() {
             var ex = fixture.Create<ExampleClass>();
 
             Assert.False(string.IsNullOrWhiteSpace(ex.PrimitiveString));
-            Assert.True(ex.PrimitiveInt > 0);
+            Assert.True(ex.PrimitiveInt == 42);
+            Assert.True(ex.Other != null);
+            Assert.Equal(3, ex.Array.Length);
+            Assert.Equal(3, ex.ImmutableArr.Length);
+            Assert.Equal(3, ex.List.Count);
+            Assert.Equal(3, ex.ImmutableLst.Count);
+            Assert.Equal(3, ex.Dictionary.Count);
+            Assert.Equal(3, ex.ImmutableDict.Count);
+            Assert.Equal(3, ex.HashSet.Count);
+            Assert.Equal(3, ex.ImmutableSet.Count);
+        }
+
+        [Fact]
+        public void AutoBogus_Build_ExampleClass() {
+            //var ex = fixture.Create<ExampleClass>();
+            var ex = fixture.Build<ExampleClass>().With(x => x.PrimitiveInt, 42).Create();
+
+            Assert.False(string.IsNullOrWhiteSpace(ex.PrimitiveString));
+            Assert.True(ex.PrimitiveInt == 42);
             Assert.True(ex.Other != null);
             Assert.Equal(3, ex.Array.Length);
             Assert.Equal(3, ex.ImmutableArr.Length);

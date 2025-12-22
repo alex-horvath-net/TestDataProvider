@@ -2,7 +2,6 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
 using System.Reflection;
-using System.Threading;
 using Bogus;
 
 namespace Common;
@@ -45,13 +44,14 @@ public sealed class BogusFixture
     private static readonly Type GenericKeyValuePairType = typeof(KeyValuePair<,>);
     private static readonly ConcurrentBag<HashSet<Type>> VisitedSets = new();
 
-    private readonly ConcurrentDictionary<Type, Func<object>> _registeredFactories = new();
+    private readonly ConcurrentDictionary<Type, Func<object>> _factories = new();
     private readonly ConcurrentDictionary<Type, Func<object>> _primitiveGenerators = new();
     private readonly ConcurrentDictionary<Type, ConstructorInfo?> _preferredConstructors = new();
     private readonly ConcurrentDictionary<Type, Array> _enumValuesCache = new();
     private readonly ThreadLocal<Randomizer> _random;
+    private readonly ThreadLocal<HashSet<Type>> _creatingTypes = new(() => new HashSet<Type>());
 
-    private static readonly MethodInfo ImmutableArrayToImmutableArray = typeof(ImmutableArray)
+    private static readonly MethodInfo ToImmutableArray = typeof(ImmutableArray)
         .GetMethods(BindingFlags.Public | BindingFlags.Static)
         .First(m => m.Name == nameof(ImmutableArray.ToImmutableArray)
                     && m.IsGenericMethod
@@ -59,7 +59,7 @@ public sealed class BogusFixture
                     && m.GetParameters()[0].ParameterType.IsGenericType
                     && m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == GenericEnumerableType);
 
-    private static readonly MethodInfo ImmutableListToImmutableList = typeof(ImmutableList)
+    private static readonly MethodInfo ToImmutableList = typeof(ImmutableList)
         .GetMethods(BindingFlags.Public | BindingFlags.Static)
         .First(m => m.Name == nameof(ImmutableList.ToImmutableList)
                     && m.IsGenericMethod
@@ -67,7 +67,7 @@ public sealed class BogusFixture
                     && m.GetParameters()[0].ParameterType.IsGenericType
                     && m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == GenericEnumerableType);
 
-    private static readonly MethodInfo ImmutableHashSetToImmutableHashSet = typeof(ImmutableHashSet)
+    private static readonly MethodInfo ToImmutableHashSet = typeof(ImmutableHashSet)
         .GetMethods(BindingFlags.Public | BindingFlags.Static)
         .First(m => m.Name == nameof(ImmutableHashSet.ToImmutableHashSet)
                     && m.IsGenericMethod
@@ -75,7 +75,7 @@ public sealed class BogusFixture
                     && m.GetParameters()[0].ParameterType.IsGenericType
                     && m.GetParameters()[0].ParameterType.GetGenericTypeDefinition() == GenericEnumerableType);
 
-    private static readonly MethodInfo ImmutableDictionaryCreateRangeTemplate = typeof(ImmutableDictionary)
+    private static readonly MethodInfo CreateRangeTemplate = typeof(ImmutableDictionary)
         .GetMethods(BindingFlags.Public | BindingFlags.Static)
         .First(m => m.Name == nameof(ImmutableDictionary.CreateRange)
                     && m.IsGenericMethod
@@ -90,7 +90,7 @@ public sealed class BogusFixture
 
     public int RepeatCount { get; set; } = 3;
 
-    public void Register<T>(Func<T> factory) => _registeredFactories[typeof(T)] = () => factory()!;
+    public void Register<T>(Func<T> factory) => _factories[typeof(T)] = () => factory()!;
 
     public T Create<T>()
     {
@@ -114,68 +114,127 @@ public sealed class BogusFixture
 
     private object Create(Type type, HashSet<Type> visitedTypes)
     {
-        if (_registeredFactories.TryGetValue(type, out var factory))
-            return factory();
+        if (TryCreateInstanceByFactory(type, visitedTypes, out var instanceByFactory))
+            return instanceByFactory ?? GeneratePrimitive(type);
 
         if (visitedTypes.Contains(type))
             return GeneratePrimitive(type);
 
-        if (type.IsGenericType)
-        {
-            var genDef = type.GetGenericTypeDefinition();
-            var genArgs = type.GetGenericArguments();
-
-            if (genDef == GenericImmutableArrayType)
-            {
-                var list = BuildList(genArgs[0], RepeatCount, visitedTypes);
-                var converter = ImmutableArrayConverters.GetOrAdd(genArgs[0], t => CreateImmutableConverter(ImmutableArrayToImmutableArray, t));
-                return converter(list);
-            }
-
-            if (genDef == GenericImmutableListType)
-            {
-                var list = BuildList(genArgs[0], RepeatCount, visitedTypes);
-                var converter = ImmutableListConverters.GetOrAdd(genArgs[0], t => CreateImmutableConverter(ImmutableListToImmutableList, t));
-                return converter(list);
-            }
-
-            if (genDef == GenericImmutableHashSetType)
-            {
-                var set = BuildHashSet(genArgs[0], RepeatCount, visitedTypes);
-                var converter = ImmutableHashSetConverters.GetOrAdd(genArgs[0], t => CreateImmutableConverter(ImmutableHashSetToImmutableHashSet, t));
-                return converter((IList)set);
-            }
-
-            if (genDef == GenericImmutableDictionaryType)
-                return BuildImmutableDictionary(genArgs[0], genArgs[1], visitedTypes);
-
-            if (genDef == GenericEnumerableType)
-                return BuildList(genArgs[0], RepeatCount, visitedTypes);
-
-            if (genDef == GenericListType)
-                return BuildList(genArgs[0], RepeatCount, visitedTypes);
-
-            if (genDef == GenericHashSetType)
-                return BuildHashSet(genArgs[0], RepeatCount, visitedTypes);
-
-            if (genDef == GenericDictionaryType)
-                return BuildDictionary(genArgs[0], genArgs[1], RepeatCount, visitedTypes);
-        }
+        if (TryCreateGeneric(type, visitedTypes, out var genericResult))
+            return genericResult ?? GeneratePrimitive(type);
 
         if (type.IsArray)
-        {
-            var elem = type.GetElementType()!;
-            var arr = Array.CreateInstance(elem, RepeatCount);
-            visitedTypes.Add(type);
-            for (var i = 0; i < RepeatCount; i++)
-                arr.SetValue(Create(elem, visitedTypes), i);
-            visitedTypes.Remove(type);
-            return arr;
-        }
+            return CreateArray(type, visitedTypes);
 
         if (IsSimple(type))
             return GeneratePrimitive(type);
 
+        return CreateUsingConstructor(type, visitedTypes);
+    }
+
+    private bool TryCreateInstanceByFactory(Type type, HashSet<Type> createdTypes, out object? result)
+    {
+        result = null;
+        if (!_factories.TryGetValue(type, out var factory))
+            return false;
+
+        var creatingTypes = _creatingTypes.Value!;
+        if (creatingTypes.Contains(type))
+            return false;
+
+        creatingTypes.Add(type);
+        createdTypes.Add(type);
+        try
+        {
+            result = factory();
+            return true;
+        }
+        finally
+        {
+            createdTypes.Remove(type);
+            creatingTypes.Remove(type);
+        }
+    }
+
+    private bool TryCreateGeneric(Type type, HashSet<Type> visitedTypes, out object? result)
+    {
+        result = null;
+        if (!type.IsGenericType)
+            return false;
+
+        var genDef = type.GetGenericTypeDefinition();
+        var genArgs = type.GetGenericArguments();
+
+        if (genDef == GenericImmutableArrayType)
+        {
+            var list = BuildList(genArgs[0], RepeatCount, visitedTypes);
+            var converter = ImmutableArrayConverters.GetOrAdd(genArgs[0], t => CreateImmutableConverter(ToImmutableArray, t));
+            result = converter(list);
+            return true;
+        }
+
+        if (genDef == GenericImmutableListType)
+        {
+            var list = BuildList(genArgs[0], RepeatCount, visitedTypes);
+            var converter = ImmutableListConverters.GetOrAdd(genArgs[0], t => CreateImmutableConverter(ToImmutableList, t));
+            result = converter(list);
+            return true;
+        }
+
+        if (genDef == GenericImmutableHashSetType)
+        {
+            var set = BuildHashSet(genArgs[0], RepeatCount, visitedTypes);
+            var converter = ImmutableHashSetConverters.GetOrAdd(genArgs[0], t => CreateImmutableConverter(ToImmutableHashSet, t));
+            result = converter((IList)set);
+            return true;
+        }
+
+        if (genDef == GenericImmutableDictionaryType)
+        {
+            result = BuildImmutableDictionary(genArgs[0], genArgs[1], visitedTypes);
+            return true;
+        }
+
+        if (genDef == GenericEnumerableType)
+        {
+            result = BuildList(genArgs[0], RepeatCount, visitedTypes);
+            return true;
+        }
+
+        if (genDef == GenericListType)
+        {
+            result = BuildList(genArgs[0], RepeatCount, visitedTypes);
+            return true;
+        }
+
+        if (genDef == GenericHashSetType)
+        {
+            result = BuildHashSet(genArgs[0], RepeatCount, visitedTypes);
+            return true;
+        }
+
+        if (genDef == GenericDictionaryType)
+        {
+            result = BuildDictionary(genArgs[0], genArgs[1], RepeatCount, visitedTypes);
+            return true;
+        }
+
+        return false;
+    }
+
+    private object CreateArray(Type type, HashSet<Type> visitedTypes)
+    {
+        var elem = type.GetElementType()!;
+        var arr = Array.CreateInstance(elem, RepeatCount);
+        visitedTypes.Add(type);
+        for (var i = 0; i < RepeatCount; i++)
+            arr.SetValue(Create(elem, visitedTypes), i);
+        visitedTypes.Remove(type);
+        return arr;
+    }
+
+    private object CreateUsingConstructor(Type type, HashSet<Type> visitedTypes)
+    {
         var ctors = type.GetConstructors();
         if (ctors.Length == 0)
         {
@@ -184,10 +243,10 @@ public sealed class BogusFixture
 
         var ctor = _preferredConstructors.GetOrAdd(type, t =>
         {
-            var ctors = t.GetConstructors();
-            return ctors.Length == 0
+            var c = t.GetConstructors();
+            return c.Length == 0
                 ? null
-                : ctors.OrderByDescending(c => c.GetParameters().Length).First();
+                : c.OrderByDescending(p => p.GetParameters().Length).First();
         });
 
         if (ctor is null)
@@ -271,7 +330,7 @@ public sealed class BogusFixture
 
         var converter = ImmutableDictionaryConverters.GetOrAdd((keyType, valueType), kv =>
         {
-            var closed = ImmutableDictionaryCreateRangeTemplate.MakeGenericMethod(kv.key, kv.value);
+            var closed = CreateRangeTemplate.MakeGenericMethod(kv.key, kv.value);
             return kvpList => closed.Invoke(null, new object[] { kvpList })!;
         });
 
@@ -304,23 +363,23 @@ public sealed class BogusFixture
 
     private Func<object> CreatePrimitiveGenerator(Type type)
     {
-        var rng = _random;
+        Randomizer Rng() => _random.Value!;
 
-        if (type == StringType) return () => rng.Value!.AlphaNumeric(8);
-        if (type == IntType) return () => Math.Max(1, rng.Value!.Int(1, int.MaxValue));
-        if (type == LongType) return () => Math.Abs(rng.Value!.Long()) + 1;
-        if (type == ShortType) return () => (short)rng.Value!.Int(short.MinValue, short.MaxValue);
-        if (type == ByteType) return () => rng.Value!.Byte();
-        if (type == BoolType) return () => rng.Value!.Bool();
-        if (type == DoubleType) return () => rng.Value!.Double();
-        if (type == FloatType) return () => (float)rng.Value!.Double();
-        if (type == DecimalType) return () => rng.Value!.Decimal();
+        if (type == StringType) return () => Rng().AlphaNumeric(8);
+        if (type == IntType) return () => Math.Max(1, Rng().Int(1, int.MaxValue));
+        if (type == LongType) return () => Math.Abs(Rng().Long()) + 1;
+        if (type == ShortType) return () => (short)Rng().Int(short.MinValue, short.MaxValue);
+        if (type == ByteType) return () => Rng().Byte();
+        if (type == BoolType) return () => Rng().Bool();
+        if (type == DoubleType) return () => Rng().Double();
+        if (type == FloatType) return () => (float)Rng().Double();
+        if (type == DecimalType) return () => Rng().Decimal();
         if (type == GuidType) return () => Guid.NewGuid();
-        if (type == DateTimeType) return () => DateTime.UtcNow.AddMilliseconds(rng.Value!.Int(-100000, 100000));
+        if (type == DateTimeType) return () => DateTime.UtcNow.AddMilliseconds(Rng().Int(-100000, 100000));
         if (type.IsEnum)
         {
             var values = _enumValuesCache.GetOrAdd(type, Enum.GetValues);
-            return () => values.GetValue(rng.Value!.Int(0, values.Length - 1))!;
+            return () => values.GetValue(Rng().Int(0, values.Length - 1))!;
         }
 
         return () => Activator.CreateInstance(type) ?? string.Empty;
@@ -343,4 +402,7 @@ public sealed class BogusFixture
     }
 
     public BogusFixture() : this(null) { }
+
+    public BogusFixtureBuilder<T> Build<T>() => new(this);
+
 }

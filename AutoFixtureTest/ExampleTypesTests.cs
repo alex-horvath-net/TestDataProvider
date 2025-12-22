@@ -9,11 +9,11 @@ namespace AutoFixtureTest {
 
         [Fact]
         public void AutoFixture_Creates_ExampleClass() {
-            var ex = fixture.Create<ExampleClass>();
+            var ex = fixture.Build<ExampleClass>().With(x => x.PrimitiveInt, 42).Create();
             //var ex = fixture.Build<ExampleClass>().With(x => x.PrimitiveInt, 42).Create();
 
             Assert.False(string.IsNullOrWhiteSpace(ex.PrimitiveString));
-            Assert.True(ex.PrimitiveInt > 0);
+            Assert.True(ex.PrimitiveInt == 42);
             Assert.True(ex.Other != null);
             Assert.Equal(3, ex.Array.Length);
             Assert.Equal(3, ex.ImmutableArr.Length);
@@ -28,10 +28,10 @@ namespace AutoFixtureTest {
 
         [Fact]
         public void AutoFixture_Creates_ExampleRecord() {
-            var ex = fixture.Create<ExampleRecord>();
+            var ex = fixture.Build<ExampleRecord>().With(x => x.PrimitiveInt, 42).Create();
 
             Assert.False(string.IsNullOrWhiteSpace(ex.PrimitiveString));
-            Assert.True(ex.PrimitiveInt > 0);
+            Assert.True(ex.PrimitiveInt == 42);
             Assert.True(ex.Other != null);
             Assert.Equal(3, ex.Array.Length);
             Assert.Equal(3, ex.ImmutableArr.Length);

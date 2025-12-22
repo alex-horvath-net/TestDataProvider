@@ -15,6 +15,8 @@ public static class Program
             .AddExporter(AsciiDocExporter.Default)
             .AddLogger(ConsoleLogger.Default);
 
-        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
+
+        BenchmarkRunner.Run<FixtureBenchmarks>();
+        //BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args, config);
     }
 }
