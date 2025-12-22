@@ -1,33 +1,32 @@
 using System.Linq.Expressions;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 
 namespace Common;
 
 public sealed class BogusFixtureBuilder<T> {
-    private readonly BogusFixture _fixture;
-    private readonly List<Func<T, T>> _mutators = new();
+    private readonly BogusFixture fixture;
+    private readonly List<Func<T, T>> mutators = new();
 
     internal BogusFixtureBuilder(BogusFixture fixture) {
-        _fixture = fixture;
+        this.fixture = fixture;
     }
 
     public BogusFixtureBuilder<T> With<TValue>(Expression<Func<T, TValue>> selector, TValue value) {
         var member = GetMember(selector);
-        _mutators.Add(target => ReconstructWith<TValue>(target, member, value));
+        mutators.Add(target => ReconstructWith<TValue>(target, member, value));
         return this;
     }
 
     public BogusFixtureBuilder<T> Without<TValue>(Expression<Func<T, TValue>> selector) {
         var member = GetMember(selector);
-        _mutators.Add(target => ReconstructWith<TValue>(target, member, default!));
+        mutators.Add(target => ReconstructWith<TValue>(target, member, default!));
         return this;
     }
 
     public T Create() {
-        var instance = _fixture.Create<T>();
-        for (var i = 0; i < _mutators.Count; i++) {
-            instance = _mutators[i](instance);
+        var instance = fixture.Create<T>();
+        for (var i = 0; i < mutators.Count; i++) {
+            instance = mutators[i](instance);
         }
 
         return instance;

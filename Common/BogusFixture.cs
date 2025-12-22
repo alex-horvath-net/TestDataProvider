@@ -46,12 +46,12 @@ public sealed class BogusFixture
     private static readonly Type GenericKeyValuePairType = typeof(KeyValuePair<,>);
     private static readonly ConcurrentBag<HashSet<Type>> VisitedSets = new();
 
-    private readonly ConcurrentDictionary<Type, Func<object>> _factories = new();
-    private readonly ConcurrentDictionary<Type, Func<object>> _primitiveGenerators = new();
-    private readonly ConcurrentDictionary<Type, ConstructorInfo?> _preferredConstructors = new();
-    private readonly ConcurrentDictionary<Type, Array> _enumValuesCache = new();
-    private readonly ThreadLocal<Randomizer> _random;
-    private readonly ThreadLocal<HashSet<Type>> _creatingTypes = new(() => new HashSet<Type>());
+    private readonly ConcurrentDictionary<Type, Func<object>> factories = new();
+    private readonly ConcurrentDictionary<Type, Func<object>> primitiveGenerators = new();
+    private readonly ConcurrentDictionary<Type, ConstructorInfo?> preferredConstructors = new();
+    private readonly ConcurrentDictionary<Type, Array> enumValuesCache = new();
+    private readonly ThreadLocal<Randomizer> random;
+    private readonly ThreadLocal<HashSet<Type>> creatingTypes = new(() => new HashSet<Type>());
 
     private static readonly MethodInfo ToImmutableArray = typeof(ImmutableArray)
         .GetMethods(BindingFlags.Public | BindingFlags.Static)
@@ -93,7 +93,7 @@ public sealed class BogusFixture
     public int RepeatCount { get; set; } = 3;
 
     public void Register<T>(Func<T> factory) {
-        _factories[typeof(T)] = () => factory()!;
+        factories[typeof(T)] = () => factory()!;
     }
 
     public T Create<T>()
@@ -146,11 +146,11 @@ public sealed class BogusFixture
     private bool TryCreateInstanceByFactory(Type type, HashSet<Type> createdTypes, out object? result)
     {
         result = null;
-        if (!_factories.TryGetValue(type, out var factory)) {
+        if (!factories.TryGetValue(type, out var factory)) {
             return false;
         }
 
-        var creatingTypes = _creatingTypes.Value!;
+        var creatingTypes = this.creatingTypes.Value!;
         if (creatingTypes.Contains(type)) {
             return false;
         }
@@ -255,7 +255,7 @@ public sealed class BogusFixture
             try { return Activator.CreateInstance(type)!; } catch { return GeneratePrimitive(type); }
         }
 
-        var ctor = _preferredConstructors.GetOrAdd(type, t =>
+        var ctor = preferredConstructors.GetOrAdd(type, t =>
         {
             var c = t.GetConstructors();
             return c.Length == 0
@@ -380,13 +380,13 @@ public sealed class BogusFixture
 
     private object GeneratePrimitive(Type type)
     {
-        var generator = _primitiveGenerators.GetOrAdd(type, CreatePrimitiveGenerator);
+        var generator = primitiveGenerators.GetOrAdd(type, CreatePrimitiveGenerator);
         return generator();
     }
 
     private Func<object> CreatePrimitiveGenerator(Type type)
     {
-        Randomizer Rng() => _random.Value!;
+        Randomizer Rng() => random.Value!;
 
         if (type == StringType) {
             return () => Rng().AlphaNumeric(8);
@@ -438,7 +438,7 @@ public sealed class BogusFixture
 
         if (type.IsEnum)
         {
-            var values = _enumValuesCache.GetOrAdd(type, Enum.GetValues);
+            var values = enumValuesCache.GetOrAdd(type, Enum.GetValues);
             return () => values.GetValue(Rng().Int(0, values.Length - 1))!;
         }
 
@@ -461,7 +461,7 @@ public sealed class BogusFixture
 
     public BogusFixture(int? seed = null)
     {
-        _random = new ThreadLocal<Randomizer>(() => seed.HasValue ? new Randomizer(seed.Value) : new Randomizer());
+        random = new ThreadLocal<Randomizer>(() => seed.HasValue ? new Randomizer(seed.Value) : new Randomizer());
     }
 
     public BogusFixture() : this(null) { }
